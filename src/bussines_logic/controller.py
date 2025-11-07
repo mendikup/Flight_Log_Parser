@@ -9,8 +9,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Tuple, Any, Optional, Set
 
 from src.bussines_logic.bin_log_parser import BinLogParser
-from utils import find_valid_sync_positions, split_ranges
-from src.utils.utils import logger
+from src.utils.utils import find_valid_sync_positions, split_ranges
+from src.utils.log_config import logger
 
 # Global state for Multiprocessing workers
 SHARED_FMT_DEFINITIONS: Dict[int, Dict[str, Any]] = {}

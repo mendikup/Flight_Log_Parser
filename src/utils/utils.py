@@ -1,3 +1,5 @@
+import re
+import struct
 import mmap
 from typing import Dict, List, Tuple
 
@@ -46,11 +48,24 @@ def split_ranges(positions: List[int], num_parts: int, file_size: int) -> List[T
     return ranges
 
 
+# ============================================================
+# 🧰 Parser helper utilities (moved from BinLogParser)
+# ============================================================
+
+def extract_field_names(raw_bytes: bytes) -> List[str]:
+    """Extract and clean field names from raw FMT data."""
+    decoded_text = raw_bytes.decode("ascii", "ignore")
+    cleaned_text = re.split(r"\x00{2,}", decoded_text)[0].strip("\x00").replace(" ", "")
+    return [field_name for field_name in cleaned_text.split(",") if field_name]
 
 
+def convert_to_struct_format(ardu_format: str, ardu_to_struct: Dict[str, str]) -> str:
+    """Convert ArduPilot format string to Python struct format."""
+    return "<" + "".join(ardu_to_struct.get(fmt_char, "") for fmt_char in ardu_format)
 
 
-
-
-
-
+def build_structs_for_local_use(fmt_definitions: Dict[int, Dict]) -> Dict[int, Dict]:
+    """Return a new fmt_definitions dict with struct objects built."""
+    for fmt_definition in fmt_definitions.values():
+        fmt_definition["struct_obj"] = struct.Struct(fmt_definition["struct_fmt"])
+    return fmt_definitions

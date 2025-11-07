@@ -1,4 +1,4 @@
-from src.bussines_logic.parallal_decoder import ParallelBinDecoder
+from src.bussines_logic.controller import ParallelBinDecoder
 from src.utils.utils import logger
 
 def main():
