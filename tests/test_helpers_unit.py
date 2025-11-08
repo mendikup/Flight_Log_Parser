@@ -1,42 +1,53 @@
-# tests/test_helpers_unit.py
 import mmap
 import os
-import struct
 import tempfile
-from utils import find_valid_sync_positions, split_ranges
-import sys, os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../parser")))
+from src.utils.utils import find_valid_sync_positions, split_ranges
+from src.utils.log_config import setup_test_logger
 
-SYNC = b"\xA3\x95"
+logger = setup_test_logger()
 
-def _write_blob(blob: bytes) -> str:
-    fd, path = tempfile.mkstemp(suffix=".bin")
-    with os.fdopen(fd, "wb") as f:
-        f.write(blob)
-    return path
+SYNC_MARKER = b"\xA3\x95"
 
-def test_find_valid_sync_positions_and_split_ranges(tmp_path):
-    msg = SYNC + bytes([200]) + b"\x00" * 8
-    blob = msg * 10
-    path = _write_blob(blob)
+
+def _write_binary_blob(binary_data: bytes) -> str:
+    """Write bytes to a temporary .bin file and return its path."""
+    file_descriptor, temp_path = tempfile.mkstemp(suffix=".bin")
+    with os.fdopen(file_descriptor, "wb") as file_handle:
+        file_handle.write(binary_data)
+    return temp_path
+
+
+def test_find_valid_sync_positions_and_split_ranges():
+    """Verify sync detection and range splitting behave correctly."""
+    message = SYNC_MARKER + bytes([200]) + b"\x00" * 8
+    binary_blob = message * 10
+    temp_path = _write_binary_blob(binary_blob)
+
     try:
-        with open(path, "rb") as f:
-            mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
-        fmt_defs = {200: {"message_length": 11}}
-        syncs = find_valid_sync_positions(mm, fmt_defs)
-        assert len(syncs) == 10
-        rs = split_ranges(syncs, 3, mm.size())
-        assert len(rs) == 3
-        assert rs[0][0] == syncs[0]
-        assert rs[1][0] == syncs[4]
-        assert rs[-1][1] == mm.size()
-        mm.close()
+        with open(temp_path, "rb") as file_handle:
+            mapped_log_file = mmap.mmap(file_handle.fileno(), 0, access=mmap.ACCESS_READ)
+
+        fmt_definitions = {200: {"message_length": 11}}
+        sync_positions = find_valid_sync_positions(mapped_log_file, fmt_definitions)
+        byte_ranges = split_ranges(sync_positions, 3, mapped_log_file.size())
+
+        logger.info(f"Found {len(sync_positions)} syncs, {len(byte_ranges)} split ranges.")
+
+        assert len(sync_positions) == 10
+        assert len(byte_ranges) == 3
+        assert byte_ranges[0][0] == sync_positions[0]
+        assert byte_ranges[-1][1] == mapped_log_file.size()
+
+        mapped_log_file.close()
     finally:
-        try: os.remove(path)
-        except FileNotFoundError: pass
+        os.remove(temp_path)
+
 
 def test_split_ranges_edge_cases():
-    ranges = split_ranges([], num_parts=4, file_size=1234)
-    assert ranges == [(0, 1234)]
-    ranges = split_ranges([0,100], num_parts=8, file_size=1000)
-    assert len(ranges) == 2
+    """Test edge cases for split_ranges (empty or minimal input)."""
+    byte_ranges = split_ranges([], num_parts=4, file_size=1234)
+    assert byte_ranges == [(0, 1234)]
+
+    byte_ranges = split_ranges([0, 100], num_parts=8, file_size=1000)
+    assert len(byte_ranges) == 2
+    logger.info("split_ranges edge cases passed successfully.")

@@ -1,90 +1,53 @@
-import sys, os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../parser')))
+from src.bussines_logic.controller import ParallelBinDecoder
+from src.utils.log_config import setup_test_logger
 
-from parallal_decoder import ParallelBinDecoder
+logger = setup_test_logger()
 
 
 def test_parallel_end_to_end(tmp_synthetic_file):
-    """
-    Full end-to-end integration test for the parallel decoder.
+    """Full integration test for ParallelBinDecoder (multiprocessing mode)."""
+    decoder = ParallelBinDecoder(tmp_synthetic_file, num_workers=2, round_floats=True)
+    decoded_messages = decoder.run()
 
-    Verifies that:
-    - The decoder runs successfully with multiprocessing
-    - All 3 synthetic messages are decoded
-    - Messages are sorted by TimeUS
-    - String fields (e.g. 'Note') are properly decoded
-    """
-    dec = ParallelBinDecoder(tmp_synthetic_file, num_workers=2, round_floats=True)
-    messages = dec.run()
-
-    assert len(messages) == 3, "Expected 3 decoded messages"
-    times = [m.get("TimeUS", 0) for m in messages]
-    assert times == sorted(times), "Messages must be sorted by TimeUS"
-    assert messages[0]["Note"] in ("hello", "world", ""), "String fields should be decoded properly"
+    logger.info(f"Decoded {len(decoded_messages)} messages in parallel mode.")
+    assert len(decoded_messages) == 3
+    time_stamps = [msg.get("TimeUS", 0) for msg in decoded_messages]
+    assert time_stamps == sorted(time_stamps)
+    assert decoded_messages[0]["Note"] in ("hello", "world", "")
 
 
 def test_parallel_message_filter(tmp_synthetic_file):
-    """
-    Ensure that message_filter works correctly in parallel decoding.
+    """Ensure message_filter works as expected for both valid and invalid filters."""
+    decoder_valid = ParallelBinDecoder(tmp_synthetic_file, num_workers=2, round_floats=False, message_filter={"TST"})
+    decoded_messages = decoder_valid.run()
+    logger.info(f"Filtered TST messages: {len(decoded_messages)}")
 
-    Case 1: Filter includes 'TST' → expect messages
-    Case 2: Filter includes a nonexistent type → expect 0 results
-    """
-    # Filter for 'TST' messages only
-    dec = ParallelBinDecoder(
-        tmp_synthetic_file,
-        num_workers=2,
-        round_floats=False,
-        running_mode="process",
-        message_filter={"TST"},
-    )
-    msgs = dec.run()
-    assert len(msgs) == 3, "Expected 3 messages of type 'TST'"
-    assert all(m["message_type"] == "TST" for m in msgs), "All messages should be type 'TST'"
+    assert len(decoded_messages) == 3
+    assert all(msg["message_type"] == "TST" for msg in decoded_messages)
 
-    # Filter for nonexistent type (should return empty list)
-    dec_empty = ParallelBinDecoder(
-        tmp_synthetic_file,
-        num_workers=2,
-        round_floats=False,
-        message_filter={"GPS"},
-    )
-    msgs_empty = dec_empty.run()
-    assert len(msgs_empty) == 0, "Expected no messages for nonexistent filter type"
+    decoder_empty = ParallelBinDecoder(tmp_synthetic_file, num_workers=2, round_floats=False, message_filter={"GPS"})
+    empty_messages = decoder_empty.run()
+    logger.info(f"Filtered GPS messages: {len(empty_messages)}")
+
+    assert len(empty_messages) == 0
 
 
 def test_parallel_threadpool_mode(tmp_synthetic_file):
-    """
-    Verify that using ThreadPool mode produces the same results
-    as multiprocessing mode.
-    """
-    # Run with process pool
-    proc_decoder = ParallelBinDecoder(
-        tmp_synthetic_file,
-        num_workers=2,
-        round_floats=True,
-        running_mode=False,
-    )
-    proc_msgs = proc_decoder.run()
+    """Validate that ThreadPool mode produces identical results as process mode."""
+    process_decoder = ParallelBinDecoder(tmp_synthetic_file, num_workers=2, round_floats=True, running_mode="process")
+    thread_decoder = ParallelBinDecoder(tmp_synthetic_file, num_workers=2, round_floats=True, running_mode="thread")
 
-    # Run with thread pool
-    thread_decoder = ParallelBinDecoder(
-        tmp_synthetic_file,
-        num_workers=2,
-        round_floats=True,
-        running_mode=True,
-    )
-    thread_msgs = thread_decoder.run()
+    process_results = process_decoder.run()
+    thread_results = thread_decoder.run()
 
-    # Should produce the same count and sorted results
-    assert len(proc_msgs) == len(thread_msgs)
-    assert [m["TimeUS"] for m in proc_msgs] == [m["TimeUS"] for m in thread_msgs]
+    logger.info(f"Process vs Thread results: {len(process_results)} / {len(thread_results)} messages.")
+    assert len(process_results) == len(thread_results)
+    assert [m["TimeUS"] for m in process_results] == [m["TimeUS"] for m in thread_results]
 
 
 def test_no_fmt_messages_in_results(tmp_synthetic_file):
-    """
-    Confirm that FMT messages are excluded from final merged output.
-    """
-    dec = ParallelBinDecoder(tmp_synthetic_file, num_workers=2)
-    msgs = dec.run()
-    assert all(m["message_type"] != "FMT" for m in msgs), "FMT messages should not appear in final results"
+    """Ensure no FMT messages appear in final merged output."""
+    decoder = ParallelBinDecoder(tmp_synthetic_file, num_workers=2)
+    decoded_messages = decoder.run()
+    assert all(m["message_type"] != "FMT" for m in decoded_messages)
+    logger.info("Verified that no FMT messages exist in merged output.")

@@ -1,80 +1,104 @@
-import sys, os
-from src.utils.config_loader import config
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../parser")))
-
-
-
-# tests/test_bin_log_parser_unit.py
 import math
-from bin_log_parser import BinLogParser, FMT_MESSAGE_LENGTH
+import os
+import mmap
+import tempfile
+from src.bussines_logic.bin_log_parser import BinLogParser, FMT_MESSAGE_LENGTH
+from src.utils.config_loader import config
+from src.utils.utils import (
+    extract_field_names,
+    convert_to_struct_format,
+    build_structs_for_local_use,
+)
+from src.utils.log_config import setup_test_logger
 
-def test_preload_fmt_and_validation(open_mmap):
-    parser = BinLogParser(open_mmap, round_floats=False)
-    count = parser.preload_fmt_messages()
-    parser.build_structs_for_local_use()
-    assert count >= 1
+logger = setup_test_logger()
+
+
+def test_preload_fmt_and_validation(open_mapped_file):
+    """Ensure that FMT messages are correctly loaded and validated."""
+    parser = BinLogParser(open_mapped_file, round_floats=False)
+    fmt_message_count = parser.preload_fmt_messages()
+    build_structs_for_local_use(parser.fmt_definitions)
+
+    logger.info(f"Preloaded {fmt_message_count} FMT definitions successfully.")
+
+    assert fmt_message_count >= 1
     assert 200 in parser.fmt_definitions
-    fmt = parser.fmt_definitions[200]
-    assert fmt["name"] == "TST"
-    assert fmt["message_length"] == fmt["struct_size"] + 3
-    assert fmt["struct_fmt"].startswith("<")
 
-def test_decode_dicts_basic(open_mmap):
-    parser = BinLogParser(open_mmap, round_floats=False)
+    fmt_definition = parser.fmt_definitions[200]
+    assert fmt_definition["name"] == "TST"
+    assert fmt_definition["message_length"] == fmt_definition["struct_size"] + 3
+    assert fmt_definition["struct_fmt"].startswith("<")
+
+
+def test_decode_dicts_basic(open_mapped_file):
+    """Decode messages and validate that basic fields match expected values."""
+    parser = BinLogParser(open_mapped_file, round_floats=False)
     parser.preload_fmt_messages()
-    parser.build_structs_for_local_use()
-    msgs = list(parser.parse_messages_in_range(0))
-    assert len(msgs) == 3
-    m0 = msgs[0]
-    assert m0["message_type"] == "TST"
-    assert m0["TimeUS"] == 1000
-    assert isinstance(m0["Val1"], float) and isinstance(m0["Val2"], float)
-    assert m0["Note"] == "hello"
+    build_structs_for_local_use(parser.fmt_definitions)
+
+    decoded_messages = list(parser.parse_messages_in_range(0))
+    logger.info(f"Decoded {len(decoded_messages)} messages from test file.")
+
+    assert len(decoded_messages) == 3
+
+    first_message = decoded_messages[0]
+    assert first_message["message_type"] == "TST"
+    assert first_message["TimeUS"] == 1000
+    assert isinstance(first_message["Val1"], float)
+    assert isinstance(first_message["Val2"], float)
+    assert first_message["Note"] == "hello"
 
 
-def test_rounding_selected_fields(open_mmap):
-    parser = BinLogParser(open_mmap, round_floats=False)
+def test_rounding_selected_fields(open_mapped_file):
+    """Ensure that selected fields retain precision when round_floats=False."""
+    parser = BinLogParser(open_mapped_file, round_floats=False)
     parser.preload_fmt_messages()
-    parser.build_structs_for_local_use()
-    msgs = list(parser.parse_messages_in_range(0))
-    raw_val = msgs[0]["Val1"]
-    assert abs(raw_val - 1.234567) < 1e-6
+    build_structs_for_local_use(parser.fmt_definitions)
 
-def test_message_filter(open_mmap):
-    parser = BinLogParser(open_mmap, round_floats=False)
+    decoded_messages = list(parser.parse_messages_in_range(0))
+    raw_value = decoded_messages[0]["Val1"]
+    assert abs(raw_value - 1.234567) < 1e-6
+    logger.info(f"Verified raw value precision for Val1 = {raw_value}")
+
+
+def test_message_filter(open_mapped_file):
+    """Verify that message_filter correctly filters message types."""
+    parser = BinLogParser(open_mapped_file, round_floats=False)
     parser.preload_fmt_messages()
-    parser.build_structs_for_local_use()
-    msgs0 = list(parser.parse_messages_in_range(0, message_filter={"GPS"}))
-    assert len(msgs0) == 0
-    msgs1 = list(parser.parse_messages_in_range(0, message_filter={"TST"}))
-    assert len(msgs1) == 3
+    build_structs_for_local_use(parser.fmt_definitions)
 
-def test_skip_unknown_message_type(open_mmap):
-    parser = BinLogParser(open_mmap, round_floats=False)
+    gps_messages = list(parser.parse_messages_in_range(0, message_filter={"GPS"}))
+    tst_messages = list(parser.parse_messages_in_range(0, message_filter={"TST"}))
+
+    logger.info(f"Filtered GPS messages: {len(gps_messages)}, TST messages: {len(tst_messages)}")
+
+    assert len(gps_messages) == 0
+    assert len(tst_messages) == 3
+
+
+def test_skip_unknown_message_type(open_mapped_file):
+    """Ensure parser gracefully skips unknown message types."""
+    parser = BinLogParser(open_mapped_file, round_floats=False)
     parser.preload_fmt_messages()
-    parser.build_structs_for_local_use()
-    msgs = list(parser.parse_messages_in_range(1000))
-    assert isinstance(msgs, list)
+    build_structs_for_local_use(parser.fmt_definitions)
+
+    decoded_messages = list(parser.parse_messages_in_range(1000))
+    logger.info(f"Decoded {len(decoded_messages)} messages after skipping unknown types.")
+    assert isinstance(decoded_messages, list)
 
 
-def test_extract_field_names_handles_nulls():
-    import mmap, tempfile, os
-    data = b"\x00" * 128
-    fd, path = tempfile.mkstemp()
-    with os.fdopen(fd, "wb") as f:
-        f.write(data)
-    try:
-        with open(path, "rb") as f:
-            mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
-        parser = BinLogParser(mm)
-        fields = parser._extract_field_names(b"TimeUS, Val1, Val2, Note\x00\x00\x00abc")
-        assert fields == ["TimeUS","Val1","Val2","Note"]
-        mm.close()
-    finally:
-        try: os.remove(path)
-        except FileNotFoundError: pass
+def test_extract_field_names_and_struct_conversion():
+    """Ensure extract_field_names and convert_to_struct_format work correctly."""
+    raw_bytes = b"TimeUS, Val1, Val2, Note\x00\x00\x00abc"
+    ardu_format = "IffZ"
+    ardu_to_struct = config.parser.ardu_to_struct
 
-def _convert_to_struct_format(self, ardu_format: str) -> str:
-    mapping = config.parser.ardu_to_struct
-    return "<" + "".join(mapping.get(c, "") for c in ardu_format)
+    fields = extract_field_names(raw_bytes)
+    struct_format = convert_to_struct_format(ardu_format, ardu_to_struct)
 
+    logger.info(f"Extracted fields: {fields}")
+    logger.info(f"Struct format: {struct_format}")
+
+    assert fields == ["TimeUS", "Val1", "Val2", "Note"]
+    assert struct_format.startswith("<Iff64s")
