@@ -48,10 +48,7 @@ def split_ranges(positions: List[int], num_parts: int, file_size: int) -> List[T
     return ranges
 
 
-# ============================================================
-# 🧰 Parser helper utilities (moved from BinLogParser)
-# ============================================================
-
+#  Parser helper utilities
 def extract_field_names(raw_bytes: bytes) -> List[str]:
     """Extract and clean field names from raw FMT data."""
     decoded_text = raw_bytes.decode("ascii", "ignore")
