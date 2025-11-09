@@ -75,7 +75,7 @@ ardupilot-bin-parser/
     └── tests.log                      # Test execution logs
 ```
 
-## 🔄 Main Processing Flow
+##  Main Processing Flow
 
 ```mermaid
 graph TD
@@ -122,7 +122,7 @@ graph TD
 | `extract_field_names()` | `utils.py` | Parses field names from FMT definitions |
 | `convert_to_struct_format()` | `utils.py` | Converts ArduPilot format to Python struct format |
 
-## 🚀 Usage
+##  Usage
 
 ### Basic Usage
 
@@ -222,7 +222,7 @@ python src/utils/benchmark_decoders.py your_log_file.bin
 
 
 
-## 📈 Benchmarking
+##  Benchmarking
 
 Compare performance across different modes:
 
