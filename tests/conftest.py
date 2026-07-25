@@ -6,7 +6,7 @@ import struct
 import tempfile
 import pytest
 from typing import List, Tuple
-from src.utils.log_config import setup_test_logger
+from src.pipeline.log_config import setup_test_logger
 
 
 

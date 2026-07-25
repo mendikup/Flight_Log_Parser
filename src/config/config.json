@@ -1,0 +1,60 @@
+{
+  "logging": {
+    "file_name": "flight_viewer.log",
+    "dir": "logs",
+    "level": "INFO",
+    "format": "%(asctime)s | %(levelname)-8s | %(filename)s:%(lineno)d | %(message)s",
+    "max_bytes": 5242880,
+    "backup_count": 5
+  },
+  "parser": {
+    "round_fields": [
+      "Lat",
+      "Lng",
+      "Alt",
+      "AltMSL",
+      "AltRel",
+      "BarAlt",
+      "Vel",
+      "Spd",
+      "VN",
+      "VE",
+      "VD",
+      "Roll",
+      "Pitch",
+      "Yaw"
+    ],
+    "ardu_to_struct": {
+      "a": "32h",
+      "b": "b",
+      "B": "B",
+      "h": "h",
+      "H": "H",
+      "i": "i",
+      "I": "I",
+      "q": "q",
+      "Q": "Q",
+      "f": "f",
+      "d": "d",
+      "n": "4s",
+      "N": "16s",
+      "Z": "64s",
+      "c": "h",
+      "C": "H",
+      "e": "i",
+      "E": "I",
+      "L": "i",
+      "M": "B"
+    },
+    "scale_factors": {
+      "c": 0.01,
+      "C": 0.01,
+      "e": 0.01,
+      "E": 0.01,
+      "L": 0.0000001
+    }
+  },
+  "general": {
+    "log_file_path": "log_file_test_01.bin"
+  }
+}
